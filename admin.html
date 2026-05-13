@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>管理 | 家計簿</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #22222f;
+    --border: #2e2e3e;
+    --accent: #4ade80;
+    --accent2: #22c55e;
+    --text: #f0f0f5;
+    --muted: #8888a0;
+    --cold: #60a5fa;
+    --frozen: #a78bfa;
+    --ambient: #fbbf24;
+    --danger: #f87171;
+    --warning: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: 90px;
+  }
+
+  header {
+    padding: 16px 20px 12px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 17px; font-weight: 700; }
+
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 57px; z-index: 9;
+  }
+  .tab {
+    flex: 1; padding: 12px 0; text-align: center;
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .page { display: none; padding: 16px; }
+  .page.show { display: block; }
+
+  .section-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 10px; margin-top: 20px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* フォーム */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px;
+    margin-bottom: 16px;
+  }
+  .form-card h3 {
+    font-size: 14px; font-weight: 700; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--border);
+  }
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    outline: none; transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select option { background: var(--surface2); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ボタン */
+  .btn {
+    width: 100%; padding: 14px;
+    border-radius: 12px; border: none;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn-primary { background: var(--accent2); color: #fff; }
+  .btn-danger { background: rgba(248,113,113,0.2); color: var(--danger); border: 1px solid var(--danger); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-save-settings { background: #2563eb; color: #fff; }
+
+  /* データリスト */
+  .data-toolbar {
+    display: flex; gap: 8px; margin-bottom: 12px; align-items: center;
+  }
+  .data-toolbar input {
+    flex: 1; padding: 9px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+  }
+  .data-toolbar input:focus { border-color: var(--accent); }
+  .data-toolbar select {
+    padding: 9px 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+    -webkit-appearance: none;
+  }
+
+  .data-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .data-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .data-item:last-child { border-bottom: none; }
+  .data-item .d-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+  }
+  .data-item .d-name { font-size: 14px; font-weight: 600; }
+  .data-item .d-price { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .data-item .d-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .data-item .d-actions { display: flex; gap: 8px; }
+  .d-btn {
+    padding: 5px 12px; border-radius: 8px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .d-btn-edit { background: rgba(96,165,250,0.15); color: var(--cold); }
+  .d-btn-del { background: rgba(248,113,113,0.15); color: var(--danger); }
+
+  .badge-sm {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px; font-weight: 600; margin-left: 6px;
+  }
+  .bc { background: rgba(96,165,250,0.15); color: var(--cold); }
+  .bf { background: rgba(167,139,250,0.15); color: var(--frozen); }
+  .ba { background: rgba(251,191,36,0.15); color: var(--ambient); }
+
+  /* ページネーション */
+  .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 12px; align-items: center; }
+  .pagination button {
+    padding: 7px 14px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-size: 13px; cursor: pointer;
+  }
+  .pagination button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .pagination .page-info { font-size: 12px; color: var(--muted); }
+
+  /* 設定 */
+  .settings-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 14px;
+  }
+  .settings-card h3 {
+    font-size: 13px; font-weight: 700; margin-bottom: 14px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .info-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .i-label { color: var(--muted); }
+  .info-row .i-val { font-weight: 600; text-align: right; max-width: 60%; word-break: break-all; }
+
+  /* モーダル */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 50;
+    align-items: flex-end; justify-content: center;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 20px; width: 100%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .modal-actions button { flex: 1; }
+
+  /* ローディング */
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 30px auto;
+    display: none;
+  }
+  .spinner.show { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* トースト */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 20px;
+    border-radius: 100px; font-size: 13px;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap; z-index: 200;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: var(--accent2); color: var(--accent); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* ナビ */
+  .nav-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; padding: 8px 0 20px;
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+    text-decoration: none; color: var(--muted);
+    font-size: 10px; padding: 6px 0;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item .nav-icon { font-size: 22px; }
+
+  .empty { text-align: center; padding: 30px; color: var(--muted); font-size: 13px; }
+  .count-badge {
+    display: inline-block; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 100px;
+    font-size: 11px; padding: 2px 10px; color: var(--muted); margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="font-size:24px">⚙️</div>
+  <div>
+    <h1>管理</h1>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('add')">➕ 追加</div>
+  <div class="tab" onclick="showTab('data')">📋 データ</div>
+  <div class="tab" onclick="showTab('settings')">🔑 設定</div>
+</div>
+
+<!-- 手動追加タブ -->
+<div class="page show" id="page-add">
+  <div class="form-card">
+    <h3>📝 手動でデータ追加</h3>
+    <div class="field-row">
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="f-date" />
+      </div>
+      <div class="field">
+        <label>金額（円）</label>
+        <input type="number" id="f-price" placeholder="198" />
+      </div>
+    </div>
+    <div class="field">
+      <label>店名</label>
+      <input type="text" id="f-store" placeholder="OKストア" list="store-list" />
+      <datalist id="store-list"></datalist>
+    </div>
+    <div class="field">
+      <label>商品名</label>
+      <input type="text" id="f-name" placeholder="牛乳" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>保存区分</label>
+        <select id="f-storage">
+          <option value="冷蔵">❄️ 冷蔵</option>
+          <option value="冷凍">🧊 冷凍</option>
+          <option value="常温" selected>🌡️ 常温</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>ジャンル</label>
+        <select id="f-genre">
+          <option>肉</option><option>魚</option><option>野菜</option>
+          <option>果物</option><option>飲料</option><option>乳製品</option>
+          <option>冷凍食品</option><option>菓子</option><option>調味料</option>
+          <option>日用品</option><option selected>その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>日持ち日数（目安）</label>
+      <input type="number" id="f-shelf" placeholder="7" value="7" />
+    </div>
+    <button class="btn btn-primary" onclick="addItem()" style="margin-top:4px">
+      ➕ 追加してGitHubに保存
+    </button>
+  </div>
+  <div class="spinner" id="add-spinner"></div>
+</div>
+
+<!-- データ管理タブ -->
+<div class="page" id="page-data">
+  <div class="data-toolbar">
+    <input type="text" id="search-kw" placeholder="🔍 商品名・店名で絞込" oninput="filterData()" />
+    <select id="search-month" onchange="filterData()">
+      <option value="">全期間</option>
+    </select>
+  </div>
+  <div class="spinner" id="data-spinner"></div>
+  <div id="data-count"></div>
+  <div class="data-list" id="data-list"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- 設定タブ -->
+<div class="page" id="page-settings">
+  <div class="settings-card">
+    <h3>🔑 API設定</h3>
+    <div class="field">
+      <label>Gemini APIキー</label>
+      <input type="password" id="s-gemini" placeholder="AIza..." />
+    </div>
+    <div class="field">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="s-github" placeholder="ghp_..." />
+    </div>
+    <div class="field">
+      <label>GitHubリポジトリ</label>
+      <input type="text" id="s-repo" placeholder="M-JINSU/kakeibo" />
+    </div>
+    <button class="btn btn-save-settings" onclick="saveSettings()">💾 設定を保存</button>
+  </div>
+
+  <div class="settings-card">
+    <h3>📊 データ情報</h3>
+    <div class="info-row"><span class="i-label">総件数</span><span class="i-val" id="info-count">-</span></div>
+    <div class="info-row"><span class="i-label">最古データ</span><span class="i-val" id="info-oldest">-</span></div>
+    <div class="info-row"><span class="i-label">最新データ</span><span class="i-val" id="info-newest">-</span></div>
+    <div class="info-row"><span class="i-label">リポジトリ</span><span class="i-val" id="info-repo">-</span></div>
+  </div>
+
+  <div class="settings-card">
+    <h3>⚠️ 危険操作</h3>
+    <button class="btn btn-danger" onclick="confirmDeleteAll()" style="margin-bottom:10px">
+      🗑️ 全データを削除する
+    </button>
+    <button class="btn btn-secondary" onclick="exportJSON()">
+      📤 JSONをエクスポート
+    </button>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ データを編集</h3>
+    <input type="hidden" id="edit-id" />
+    <div class="field-row">
+      <div class="field"><label>日付</label><input type="date" id="edit-date" /></div>
+      <div class="field"><label>金額</label><input type="number" id="edit-price" /></div>
+    </div>
+    <div class="field"><label>店名</label><input type="text" id="edit-store" /></div>
+    <div class="field"><label>商品名</label><input type="text" id="edit-name" /></div>
+    <div class="field-row">
+      <div class="field">
+        <label>保存区分</label>
+        <select id="edit-storage">
+          <option value="冷蔵">❄️ 冷蔵</option>
+          <option value="冷凍">🧊 冷凍</option>
+          <option value="常温">🌡️ 常温</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>ジャンル</label>
+        <select id="edit-genre">
+          <option>肉</option><option>魚</option><option>野菜</option>
+          <option>果物</option><option>飲料</option><option>乳製品</option>
+          <option>冷凍食品</option><option>菓子</option><option>調味料</option>
+          <option>日用品</option><option>その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>日持ち日数</label><input type="number" id="edit-shelf" /></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEdit()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<nav class="nav-bar">
+  <a class="nav-item" href="upload.html"><span class="nav-icon">📷</span>登録</a>
+  <a class="nav-item" href="index.html"><span class="nav-icon">📊</span>集計</a>
+  <a class="nav-item" href="index.html"><span class="nav-icon">🧊</span>冷蔵庫</a>
+  <a class="nav-item active" href="admin.html"><span class="nav-icon">⚙️</span>管理</a>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const REPO = () => localStorage.getItem('githubRepo') || 'M-JINSU/kakeibo';
+const DATA_PATH = 'data/kakeibo.json';
+const PER_PAGE = 20;
+
+let allData = [];
+let filtered = [];
+let currentPage = 1;
+
+// 初期化
+window.onload = async () => {
+  document.getElementById('f-date').value = today();
+  loadSettingsUI();
+  await loadData();
+};
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadSettingsUI() {
+  document.getElementById('s-gemini').value = localStorage.getItem('geminiKey') || '';
+  document.getElementById('s-github').value = localStorage.getItem('githubToken') || '';
+  document.getElementById('s-repo').value = localStorage.getItem('githubRepo') || 'M-JINSU/kakeibo';
+}
+
+function saveSettings() {
+  localStorage.setItem('geminiKey', document.getElementById('s-gemini').value.trim());
+  localStorage.setItem('githubToken', document.getElementById('s-github').value.trim());
+  localStorage.setItem('githubRepo', document.getElementById('s-repo').value.trim());
+  showToast('設定を保存しました', 'success');
+}
+
+// データ読み込み
+async function loadData() {
+  document.getElementById('data-spinner').classList.add('show');
+  try {
+    const url = `https://raw.githubusercontent.com/${REPO()}/main/${DATA_PATH}?t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('データ取得失敗');
+    allData = await res.json();
+    renderDataTab();
+    renderSettingsInfo();
+    populateMonthFilter();
+    populateStoreList();
+  } catch (e) {
+    showToast('読み込みエラー: ' + e.message, 'error');
+  }
+  document.getElementById('data-spinner').classList.remove('show');
+}
+
+function populateMonthFilter() {
+  const months = [...new Set(allData.map(d => d.date.slice(0,7)))].sort().reverse();
+  const sel = document.getElementById('search-month');
+  sel.innerHTML = '<option value="">全期間</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+function populateStoreList() {
+  const stores = [...new Set(allData.map(d => d.store))];
+  document.getElementById('store-list').innerHTML = stores.map(s => `<option value="${s}">`).join('');
+}
+
+function filterData() {
+  const kw = document.getElementById('search-kw').value.toLowerCase();
+  const month = document.getElementById('search-month').value;
+  filtered = allData.filter(d => {
+    const matchKw = !kw || d.name?.toLowerCase().includes(kw) || d.store?.toLowerCase().includes(kw);
+    const matchMonth = !month || d.date?.startsWith(month);
+    return matchKw && matchMonth;
+  }).sort((a,b) => b.date.localeCompare(a.date));
+  currentPage = 1;
+  renderDataList();
+}
+
+function renderDataTab() {
+  filtered = [...allData].sort((a,b) => b.date.localeCompare(a.date));
+  renderDataList();
+}
+
+function renderDataList() {
+  const el = document.getElementById('data-list');
+  const total = filtered.length;
+  const pages = Math.ceil(total / PER_PAGE);
+  const start = (currentPage - 1) * PER_PAGE;
+  const slice = filtered.slice(start, start + PER_PAGE);
+
+  document.getElementById('data-count').innerHTML = total > 0
+    ? `<div class="count-badge">${total}件</div>` : '';
+
+  if (slice.length === 0) {
+    el.innerHTML = '<div class="empty">データがありません</div>';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  const badgeCls = s => s === '冷蔵' ? 'bc' : s === '冷凍' ? 'bf' : 'ba';
+
+  el.innerHTML = slice.map((item, i) => {
+    const idx = start + i;
+    return `<div class="data-item">
+      <div class="d-header">
+        <span class="d-name">${item.name || '-'}<span class="badge-sm ${badgeCls(item.storage)}">${item.storage || '常温'}</span></span>
+        <span class="d-price">¥${(item.price||0).toLocaleString()}</span>
+      </div>
+      <div class="d-meta">${item.date} · ${item.store || '-'} · ${item.genre || 'その他'}</div>
+      <div class="d-actions">
+        <button class="d-btn d-btn-edit" onclick="openEdit(${idx})">✏️ 編集</button>
+        <button class="d-btn d-btn-del" onclick="deleteItem(${idx})">🗑️ 削除</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ページネーション
+  document.getElementById('pagination').innerHTML = pages > 1 ? `
+    <button onclick="changePage(-1)" ${currentPage<=1?'disabled':''}>‹ 前</button>
+    <span class="page-info">${currentPage} / ${pages}</span>
+    <button onclick="changePage(1)" ${currentPage>=pages?'disabled':''}>次 ›</button>
+  ` : '';
+}
+
+function changePage(d) {
+  currentPage += d;
+  renderDataList();
+  window.scrollTo(0, 0);
+}
+
+// 手動追加
+async function addItem() {
+  const name = document.getElementById('f-name').value.trim();
+  const store = document.getElementById('f-store').value.trim();
+  const price = parseInt(document.getElementById('f-price').value) || 0;
+  const date = document.getElementById('f-date').value;
+  if (!name || !store || !date) { showToast('日付・店名・商品名は必須です', 'error'); return; }
+
+  const newItem = {
+    id: `${date.replace(/-/g,'')}-${Date.now()}`,
+    date,
+    store,
+    name,
+    price,
+    storage: document.getElementById('f-storage').value,
+    genre: document.getElementById('f-genre').value,
+    shelf_days: parseInt(document.getElementById('f-shelf').value) || 7
+  };
+
+  document.getElementById('add-spinner').classList.add('show');
+  const merged = [...allData, newItem];
+  const ok = await saveToGitHub(merged, `手動追加: ${name}`);
+  document.getElementById('add-spinner').classList.remove('show');
+  if (ok) {
+    allData = merged;
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-price').value = '';
+    showToast(`「${name}」を追加しました`, 'success');
+    populateStoreList();
+    populateMonthFilter();
+    renderSettingsInfo();
+  }
+}
+
+// 編集モーダル
+function openEdit(idx) {
+  const item = filtered[idx];
+  document.getElementById('edit-id').value = idx;
+  document.getElementById('edit-date').value = item.date || '';
+  document.getElementById('edit-price').value = item.price || 0;
+  document.getElementById('edit-store').value = item.store || '';
+  document.getElementById('edit-name').value = item.name || '';
+  document.getElementById('edit-storage').value = item.storage || '常温';
+  document.getElementById('edit-genre').value = item.genre || 'その他';
+  document.getElementById('edit-shelf').value = item.shelf_days || 7;
+  document.getElementById('edit-modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('show');
+}
+
+async function saveEdit() {
+  const idx = parseInt(document.getElementById('edit-id').value);
+  const original = filtered[idx];
+  const updated = {
+    ...original,
+    date: document.getElementById('edit-date').value,
+    price: parseInt(document.getElementById('edit-price').value) || 0,
+    store: document.getElementById('edit-store').value.trim(),
+    name: document.getElementById('edit-name').value.trim(),
+    storage: document.getElementById('edit-storage').value,
+    genre: document.getElementById('edit-genre').value,
+    shelf_days: parseInt(document.getElementById('edit-shelf').value) || 7,
+  };
+  const allIdx = allData.findIndex(d => d.id === original.id);
+  if (allIdx < 0) { showToast('対象データが見つかりません', 'error'); return; }
+  const merged = [...allData];
+  merged[allIdx] = updated;
+  const ok = await saveToGitHub(merged, `編集: ${updated.name}`);
+  if (ok) {
+    allData = merged;
+    filterData();
+    closeModal();
+    showToast('保存しました', 'success');
+  }
+}
+
+// 削除
+async function deleteItem(idx) {
+  const item = filtered[idx];
+  if (!confirm(`「${item.name}」を削除しますか？`)) return;
+  const merged = allData.filter(d => d.id !== item.id);
+  const ok = await saveToGitHub(merged, `削除: ${item.name}`);
+  if (ok) {
+    allData = merged;
+    filterData();
+    renderSettingsInfo();
+    showToast('削除しました', 'success');
+  }
+}
+
+// 全削除
+async function confirmDeleteAll() {
+  if (!confirm('全データを削除します。この操作は取り消せません。本当に削除しますか？')) return;
+  if (!confirm('もう一度確認します。本当に全件削除しますか？')) return;
+  const ok = await saveToGitHub([], '全データ削除');
+  if (ok) {
+    allData = [];
+    filterData();
+    renderSettingsInfo();
+    showToast('全データを削除しました', 'success');
+  }
+}
+
+// JSONエクスポート
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `kakeibo_${today()}.json`;
+  a.click();
+  showToast('エクスポートしました', 'success');
+}
+
+// 設定情報表示
+function renderSettingsInfo() {
+  document.getElementById('info-count').textContent = allData.length + '件';
+  const dates = allData.map(d => d.date).filter(Boolean).sort();
+  document.getElementById('info-oldest').textContent = dates[0] || '-';
+  document.getElementById('info-newest').textContent = dates[dates.length-1] || '-';
+  document.getElementById('info-repo').textContent = REPO();
+}
+
+// GitHub保存
+async function saveToGitHub(data, message) {
+  const token = localStorage.getItem('githubToken') || '';
+  const repo = REPO();
+  if (!token) { showToast('GitHubトークンを設定してください', 'error'); return false; }
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${DATA_PATH}`;
+  const headers = { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' };
+  try {
+    let sha = null;
+    const getRes = await fetch(apiUrl, { headers });
+    if (getRes.ok) { const d = await getRes.json(); sha = d.sha; }
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+    const body = { message, content, ...(sha ? { sha } : {}) };
+    const putRes = await fetch(apiUrl, { method: 'PUT', headers, body: JSON.stringify(body) });
+    if (!putRes.ok) throw new Error('GitHub書き込み失敗');
+    return true;
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+    return false;
+  }
+}
+
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['add','data','settings'][i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('show'));
+  document.getElementById('page-' + tab).classList.add('show');
+  if (tab === 'data') filterData();
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+</script>
+</body>
+</html>

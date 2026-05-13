@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>家計簿 | ダッシュボード</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #22222f;
+    --border: #2e2e3e;
+    --accent: #4ade80;
+    --accent2: #22c55e;
+    --text: #f0f0f5;
+    --muted: #8888a0;
+    --cold: #60a5fa;
+    --frozen: #a78bfa;
+    --ambient: #fbbf24;
+    --danger: #f87171;
+    --warning: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: 90px;
+  }
+
+  /* ヘッダー */
+  header {
+    padding: 16px 20px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 17px; font-weight: 700; }
+  .month-nav { display: flex; align-items: center; gap: 10px; }
+  .month-nav button {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); width: 32px; height: 32px;
+    border-radius: 8px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .month-nav .month-label { font-size: 15px; font-weight: 700; min-width: 80px; text-align: center; }
+
+  /* タブ */
+  .tabs {
+    display: flex; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 57px; z-index: 9;
+  }
+  .tab {
+    flex: 1; padding: 12px 0; text-align: center;
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* セクション */
+  .page { display: none; padding: 16px; }
+  .page.show { display: block; }
+  .section-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 10px; margin-top: 20px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* サマリーカード */
+  .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px;
+  }
+  .summary-card .s-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .summary-card .s-value { font-size: 22px; font-weight: 700; }
+  .summary-card .s-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .summary-card.accent { border-color: var(--accent2); }
+  .summary-card.accent .s-value { color: var(--accent); }
+
+  /* 棒グラフ */
+  .bar-chart { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .bar-item { margin-bottom: 12px; }
+  .bar-item:last-child { margin-bottom: 0; }
+  .bar-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 13px; }
+  .bar-header .bar-label { color: var(--text); }
+  .bar-header .bar-val { color: var(--muted); font-size: 12px; }
+  .bar-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+  /* 冷蔵庫グリッド */
+  .fridge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fridge-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px;
+    position: relative; overflow: hidden;
+  }
+  .fridge-card .f-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .fridge-card .f-store { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .fridge-card .f-status {
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 100px; display: inline-block;
+  }
+  .status-ok { background: rgba(74,222,128,0.15); color: var(--accent); }
+  .status-warn { background: rgba(251,146,60,0.15); color: var(--warning); }
+  .status-danger { background: rgba(248,113,113,0.15); color: var(--danger); }
+  .status-gone { background: rgba(136,136,160,0.15); color: var(--muted); }
+  .fridge-card .f-days { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .fridge-card .f-badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 18px;
+  }
+  .fridge-section-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px; margin-top: 20px;
+  }
+  .fridge-section-header:first-child { margin-top: 0; }
+  .fridge-section-header .tag {
+    font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 100px;
+  }
+  .tag-cold { background: rgba(96,165,250,0.15); color: var(--cold); }
+  .tag-frozen { background: rgba(167,139,250,0.15); color: var(--frozen); }
+  .tag-ambient { background: rgba(251,191,36,0.15); color: var(--ambient); }
+  .fridge-section-header .count { font-size: 11px; color: var(--muted); }
+
+  /* 明細リスト */
+  .detail-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .detail-item {
+    display: flex; align-items: center; padding: 12px 16px; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-item:last-child { border-bottom: none; }
+  .detail-item .d-date { font-size: 11px; color: var(--muted); min-width: 36px; }
+  .detail-item .d-info { flex: 1; }
+  .detail-item .d-name { font-size: 13px; font-weight: 600; }
+  .detail-item .d-store { font-size: 11px; color: var(--muted); }
+  .detail-item .d-price { font-size: 14px; font-weight: 700; }
+  .badge-sm {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px; font-weight: 600;
+  }
+
+  /* 店別 */
+  .store-list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .store-item {
+    display: flex; align-items: center; padding: 14px 16px; gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .store-item:last-child { border-bottom: none; }
+  .store-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--surface2); display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .store-item .s-name { flex: 1; font-size: 14px; font-weight: 600; }
+  .store-item .s-count { font-size: 11px; color: var(--muted); }
+  .store-item .s-total { font-size: 15px; font-weight: 700; color: var(--accent); }
+
+  /* 空状態 */
+  .empty {
+    text-align: center; padding: 40px 20px;
+    color: var(--muted); font-size: 14px;
+  }
+  .empty .big { font-size: 40px; margin-bottom: 12px; }
+
+  /* ローディング */
+  .loading-overlay {
+    display: none; text-align: center; padding: 60px 20px;
+  }
+  .loading-overlay.show { display: block; }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ナビ */
+  .nav-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex; padding: 8px 0 20px;
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+    text-decoration: none; color: var(--muted);
+    font-size: 10px; padding: 6px 0;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item .nav-icon { font-size: 22px; }
+
+  /* トースト */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 20px;
+    border-radius: 100px; font-size: 13px;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 家計簿</h1>
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <div class="month-label" id="monthLabel">-</div>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('summary')">📊 集計</div>
+  <div class="tab" onclick="showTab('fridge')">🧊 冷蔵庫</div>
+  <div class="tab" onclick="showTab('detail')">📋 明細</div>
+  <div class="tab" onclick="showTab('store')">🏪 店別</div>
+</div>
+
+<!-- 集計タブ -->
+<div class="page show" id="page-summary">
+  <div class="loading-overlay show" id="loading">
+    <div class="spinner"></div>
+    <p style="color:var(--muted);font-size:13px;">データを読み込み中...</p>
+  </div>
+
+  <div id="summary-content" style="display:none">
+    <div class="section-label">今月の支出</div>
+    <div class="summary-grid">
+      <div class="summary-card accent">
+        <div class="s-label">合計食費</div>
+        <div class="s-value" id="totalSpend">¥0</div>
+        <div class="s-sub" id="totalCount">0件</div>
+      </div>
+      <div class="summary-card">
+        <div class="s-label">1日平均</div>
+        <div class="s-value" id="dailyAvg">¥0</div>
+        <div class="s-sub" id="avgSub">-</div>
+      </div>
+      <div class="summary-card">
+        <div class="s-label">最多支出店</div>
+        <div class="s-value" style="font-size:15px" id="topStore">-</div>
+        <div class="s-sub" id="topStoreAmt">¥0</div>
+      </div>
+      <div class="summary-card">
+        <div class="s-label">購入回数</div>
+        <div class="s-value" id="visitCount">0</div>
+        <div class="s-sub">回のお買い物</div>
+      </div>
+    </div>
+
+    <div class="section-label">ジャンル別支出</div>
+    <div class="bar-chart" id="genreChart"></div>
+
+    <div class="section-label">保存区分</div>
+    <div class="bar-chart" id="storageChart"></div>
+  </div>
+</div>
+
+<!-- 冷蔵庫タブ -->
+<div class="page" id="page-fridge">
+  <div id="fridge-content"></div>
+</div>
+
+<!-- 明細タブ -->
+<div class="page" id="page-detail">
+  <div id="detail-content"></div>
+</div>
+
+<!-- 店別タブ -->
+<div class="page" id="page-store">
+  <div id="store-content"></div>
+</div>
+
+<nav class="nav-bar">
+  <a class="nav-item" href="upload.html"><span class="nav-icon">📷</span>登録</a>
+  <a class="nav-item active" href="index.html"><span class="nav-icon">📊</span>集計</a>
+  <a class="nav-item" href="index.html" onclick="showTab('fridge');return false;"><span class="nav-icon">🧊</span>冷蔵庫</a>
+  <a class="nav-item" href="admin.html"><span class="nav-icon">⚙️</span>管理</a>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const REPO = localStorage.getItem('githubRepo') || 'M-JINSU/kakeibo';
+const DATA_URL = `https://raw.githubusercontent.com/${REPO}/main/data/kakeibo.json`;
+
+let allData = [];
+let currentYear, currentMonth;
+const now = new Date();
+currentYear = now.getFullYear();
+currentMonth = now.getMonth() + 1;
+
+const GENRE_COLORS = {
+  '肉': '#f87171', '魚': '#60a5fa', '野菜': '#4ade80', '果物': '#fb923c',
+  '飲料': '#38bdf8', '乳製品': '#fde68a', '冷凍食品': '#a78bfa',
+  '菓子': '#f9a8d4', '調味料': '#86efac', '日用品': '#94a3b8', 'その他': '#8888a0'
+};
+
+const STORAGE_ICONS = { '冷蔵': '❄️', '冷凍': '🧊', '常温': '🌡️' };
+
+window.onload = async () => {
+  updateMonthLabel();
+  await loadData();
+};
+
+async function loadData() {
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('summary-content').style.display = 'none';
+  try {
+    const res = await fetch(DATA_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error('データが取得できません');
+    allData = await res.json();
+    renderAll();
+  } catch (e) {
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('summary-content').style.display = 'block';
+    document.getElementById('summary-content').innerHTML = `<div class="empty"><div class="big">📭</div><p>データがありません<br><small style="font-size:11px">リポジトリ設定を確認してください<br>${REPO}</small></p></div>`;
+    showToast('読み込みエラー: ' + e.message, 'error');
+  }
+}
+
+function getMonthData() {
+  return allData.filter(d => {
+    const dt = new Date(d.date);
+    return dt.getFullYear() === currentYear && dt.getMonth() + 1 === currentMonth;
+  });
+}
+
+function renderAll() {
+  document.getElementById('loading').classList.remove('show');
+  document.getElementById('summary-content').style.display = 'block';
+  const data = getMonthData();
+  renderSummary(data);
+  renderFridge(allData);
+  renderDetail(data);
+  renderStore(data);
+}
+
+function updateMonthLabel() {
+  document.getElementById('monthLabel').textContent = `${currentYear}/${String(currentMonth).padStart(2,'0')}`;
+}
+
+function changeMonth(d) {
+  currentMonth += d;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  renderAll();
+}
+
+// ---- 集計 ----
+function renderSummary(data) {
+  const total = data.reduce((s, i) => s + (i.price || 0), 0);
+  const days = new Date(currentYear, currentMonth, 0).getDate();
+  const avg = total > 0 ? Math.round(total / days) : 0;
+
+  document.getElementById('totalSpend').textContent = '¥' + total.toLocaleString();
+  document.getElementById('totalCount').textContent = data.length + '品目';
+  document.getElementById('dailyAvg').textContent = '¥' + avg.toLocaleString();
+  document.getElementById('avgSub').textContent = `${days}日換算`;
+
+  // 店別集計
+  const storeMap = {};
+  data.forEach(i => { storeMap[i.store] = (storeMap[i.store] || 0) + (i.price || 0); });
+  const topStore = Object.entries(storeMap).sort((a,b) => b[1]-a[1])[0];
+  document.getElementById('topStore').textContent = topStore ? topStore[0] : '-';
+  document.getElementById('topStoreAmt').textContent = topStore ? '¥' + topStore[1].toLocaleString() : '¥0';
+
+  // 購入回数（日+店の組み合わせ）
+  const visits = new Set(data.map(i => i.date + '_' + i.store)).size;
+  document.getElementById('visitCount').textContent = visits;
+
+  // ジャンル棒グラフ
+  const genreMap = {};
+  data.forEach(i => { genreMap[i.genre || 'その他'] = (genreMap[i.genre || 'その他'] || 0) + (i.price || 0); });
+  renderBarChart('genreChart', genreMap, total, GENRE_COLORS);
+
+  // 保存区分
+  const storageMap = {};
+  data.forEach(i => { storageMap[i.storage || '常温'] = (storageMap[i.storage || '常温'] || 0) + (i.price || 0); });
+  const storageCols = { '冷蔵': '#60a5fa', '冷凍': '#a78bfa', '常温': '#fbbf24' };
+  renderBarChart('storageChart', storageMap, total, storageCols);
+}
+
+function renderBarChart(id, map, total, colors) {
+  const el = document.getElementById(id);
+  if (!map || Object.keys(map).length === 0) { el.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:10px">データなし</p>'; return; }
+  const sorted = Object.entries(map).sort((a,b) => b[1]-a[1]);
+  el.innerHTML = sorted.map(([k, v]) => {
+    const pct = total > 0 ? Math.round(v / total * 100) : 0;
+    const color = colors[k] || '#8888a0';
+    return `<div class="bar-item">
+      <div class="bar-header">
+        <span class="bar-label">${k}</span>
+        <span class="bar-val">¥${v.toLocaleString()} (${pct}%)</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---- 冷蔵庫 ----
+function renderFridge(data) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const el = document.getElementById('fridge-content');
+
+  // 直近30日の購入品（最新購入のみ）
+  const itemMap = {};
+  data.forEach(i => {
+    const key = i.name + '_' + (i.storage || '常温');
+    if (!itemMap[key] || i.date > itemMap[key].date) itemMap[key] = i;
+  });
+
+  const items = Object.values(itemMap).map(i => {
+    const purchased = new Date(i.date);
+    purchased.setHours(0,0,0,0);
+    const elapsed = Math.floor((today - purchased) / 86400000);
+    const shelf = i.shelf_days || 7;
+    const remaining = shelf - elapsed;
+    let statusClass, statusText;
+    if (remaining < 0) { statusClass = 'status-gone'; statusText = '期限切れ？'; }
+    else if (remaining === 0) { statusClass = 'status-danger'; statusText = '今日まで'; }
+    else if (remaining <= 2) { statusClass = 'status-warn'; statusText = `あと${remaining}日`; }
+    else { statusClass = 'status-ok'; statusText = `あと${remaining}日`; }
+    return { ...i, elapsed, remaining, statusClass, statusText };
+  }).sort((a,b) => a.remaining - b.remaining);
+
+  const groups = { '冷蔵': [], '冷凍': [], '常温': [] };
+  items.forEach(i => { (groups[i.storage || '常温'] || groups['常温']).push(i); });
+
+  let html = '';
+  [['冷蔵','tag-cold'],['冷凍','tag-frozen'],['常温','tag-ambient']].forEach(([key, cls]) => {
+    const grp = groups[key];
+    if (grp.length === 0) return;
+    html += `<div class="fridge-section-header">
+      <span class="tag ${cls}">${STORAGE_ICONS[key]} ${key}</span>
+      <span class="count">${grp.length}品</span>
+    </div>
+    <div class="fridge-grid">`;
+    grp.forEach(i => {
+      html += `<div class="fridge-card">
+        <div class="f-badge">${STORAGE_ICONS[i.storage] || '📦'}</div>
+        <div class="f-name">${i.name}</div>
+        <div class="f-store">${i.store}</div>
+        <span class="f-status ${i.statusClass}">${i.statusText}</span>
+        <div class="f-days">購入: ${i.date}</div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  el.innerHTML = html || '<div class="empty"><div class="big">🧺</div><p>データがありません</p></div>';
+}
+
+// ---- 明細 ----
+function renderDetail(data) {
+  const el = document.getElementById('detail-content');
+  if (data.length === 0) { el.innerHTML = '<div class="empty"><div class="big">📋</div><p>この月のデータがありません</p></div>'; return; }
+  const sorted = [...data].sort((a,b) => b.date.localeCompare(a.date));
+  const badgeClass = s => s === '冷蔵' ? 'badge-cold' : s === '冷凍' ? 'badge-frozen' : 'badge-ambient';
+  const badgeColor = s => s === '冷蔵' ? 'background:rgba(96,165,250,0.15);color:#60a5fa' : s === '冷凍' ? 'background:rgba(167,139,250,0.15);color:#a78bfa' : 'background:rgba(251,191,36,0.15);color:#fbbf24';
+
+  el.innerHTML = `<div class="detail-list">${sorted.map(i => `
+    <div class="detail-item">
+      <div class="d-date">${i.date.slice(5)}</div>
+      <div class="d-info">
+        <div class="d-name">${i.name} <span class="badge-sm" style="${badgeColor(i.storage)}">${i.storage || '常温'}</span></div>
+        <div class="d-store">${i.store} · ${i.genre || 'その他'}</div>
+      </div>
+      <div class="d-price">¥${(i.price||0).toLocaleString()}</div>
+    </div>`).join('')}</div>`;
+}
+
+// ---- 店別 ----
+function renderStore(data) {
+  const el = document.getElementById('store-content');
+  if (data.length === 0) { el.innerHTML = '<div class="empty"><div class="big">🏪</div><p>この月のデータがありません</p></div>'; return; }
+  const storeMap = {};
+  data.forEach(i => {
+    if (!storeMap[i.store]) storeMap[i.store] = { total: 0, count: 0 };
+    storeMap[i.store].total += i.price || 0;
+    storeMap[i.store].count++;
+  });
+  const sorted = Object.entries(storeMap).sort((a,b) => b[1].total - a[1].total);
+  const icons = ['🥇','🥈','🥉','🏪','🏪','🏪','🏪','🏪','🏪','🏪'];
+  el.innerHTML = `<div class="store-list">${sorted.map(([name, d], idx) => `
+    <div class="store-item">
+      <div class="store-icon">${icons[idx] || '🏪'}</div>
+      <div>
+        <div class="s-name">${name}</div>
+        <div class="s-count">${d.count}品目</div>
+      </div>
+      <div class="s-total">¥${d.total.toLocaleString()}</div>
+    </div>`).join('')}</div>`;
+}
+
+// ---- タブ切替 ----
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['summary','fridge','detail','store'][i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('show'));
+  document.getElementById('page-' + tab).classList.add('show');
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+</script>
+</body>
+</html>
