@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>レシート登録 | 家計簿</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #22222f;
+    --border: #2e2e3e;
+    --accent: #4ade80;
+    --accent2: #22c55e;
+    --text: #f0f0f5;
+    --muted: #8888a0;
+    --cold: #60a5fa;
+    --frozen: #a78bfa;
+    --ambient: #fbbf24;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  header {
+    padding: 16px 20px 12px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header .sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .icon-circle {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+
+  .section { padding: 20px; }
+  .section + .section { padding-top: 0; }
+
+  /* 撮影エリア */
+  .scan-area {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    min-height: 200px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .scan-area:active { border-color: var(--accent); }
+  .scan-area.has-image { border-style: solid; border-color: var(--accent2); }
+  .scan-area img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    border-radius: 14px;
+    position: absolute; inset: 0;
+  }
+  .scan-area .overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    border-radius: 14px;
+  }
+  .scan-placeholder { text-align: center; }
+  .scan-placeholder .big-icon { font-size: 48px; margin-bottom: 8px; }
+  .scan-placeholder p { font-size: 14px; color: var(--muted); }
+  .scan-placeholder .hint { font-size: 12px; color: var(--muted); opacity: 0.6; margin-top: 4px; }
+  input[type=file] { display: none; }
+
+  /* ボタン */
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  .btn {
+    flex: 1; padding: 14px 10px;
+    border-radius: 12px; border: none;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity 0.15s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn-primary { background: var(--accent2); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-analyze {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, #16a34a, #4ade80);
+    color: #fff; border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; margin-top: 16px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-analyze:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-save {
+    width: 100%; padding: 16px;
+    background: #2563eb; color: #fff;
+    border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; margin-top: 10px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: opacity 0.2s;
+  }
+  .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ローディング */
+  .loading {
+    display: none; text-align: center;
+    padding: 30px 20px;
+    background: var(--surface);
+    border-radius: 16px;
+    margin-top: 16px;
+  }
+  .loading.show { display: block; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { font-size: 13px; color: var(--muted); }
+
+  /* 解析結果 */
+  .result-box {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-top: 16px;
+    overflow: hidden;
+  }
+  .result-box.show { display: block; }
+  .result-header {
+    padding: 14px 16px;
+    background: var(--surface2);
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-header .store-name { font-size: 15px; font-weight: 700; }
+  .result-header .date-str { font-size: 12px; color: var(--muted); }
+
+  .item-list { padding: 8px 0; }
+  .item-row {
+    display: flex; align-items: center;
+    padding: 10px 16px; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .item-row:last-child { border-bottom: none; }
+  .item-name { flex: 1; font-size: 14px; }
+  .item-name input {
+    background: transparent; border: none; color: var(--text);
+    font-size: 14px; width: 100%; outline: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s; padding: 2px 0;
+  }
+  .item-name input:focus { border-bottom-color: var(--accent); }
+  .badge {
+    font-size: 11px; font-weight: 600;
+    padding: 3px 9px; border-radius: 100px;
+    flex-shrink: 0;
+  }
+  .badge-cold { background: rgba(96,165,250,0.15); color: var(--cold); }
+  .badge-frozen { background: rgba(167,139,250,0.15); color: var(--frozen); }
+  .badge-ambient { background: rgba(251,191,36,0.15); color: var(--ambient); }
+  .item-price { font-size: 14px; font-weight: 600; min-width: 56px; text-align: right; }
+  .item-price input {
+    background: transparent; border: none; color: var(--text);
+    font-size: 14px; font-weight: 600; width: 56px;
+    text-align: right; outline: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s; padding: 2px 0;
+  }
+  .item-price input:focus { border-bottom-color: var(--accent); }
+  .item-del { color: var(--danger); font-size: 18px; cursor: pointer; padding: 4px; }
+
+  .total-row {
+    padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .total-row .label { font-size: 13px; color: var(--muted); }
+  .total-row .amount { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+  /* 設定パネル */
+  .settings-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .settings-panel h3 { font-size: 12px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .field input {
+    width: 100%; padding: 10px 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px;
+    outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .field input[type=password] { letter-spacing: 0.1em; }
+
+  /* トースト */
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 12px 24px;
+    border-radius: 100px; font-size: 14px;
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: var(--accent2); color: var(--accent); }
+  .toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* nav */
+  .nav-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 20px;
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+    text-decoration: none; color: var(--muted);
+    font-size: 10px; padding: 6px 0;
+  }
+  .nav-item.active { color: var(--accent); }
+  .nav-item .nav-icon { font-size: 22px; }
+  .content-wrap { padding-bottom: 90px; }
+
+  .section-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="icon-circle">🧾</div>
+  <div>
+    <h1>レシート登録</h1>
+    <div class="sub">撮影 → AI解析 → 保存</div>
+  </div>
+</header>
+
+<div class="content-wrap">
+  <div class="section">
+    <!-- API設定 -->
+    <div class="settings-panel">
+      <h3>⚙️ API設定（初回のみ）</h3>
+      <div class="field">
+        <label>Gemini APIキー</label>
+        <input type="password" id="geminiKey" placeholder="AIza..." />
+      </div>
+      <div class="field">
+        <label>GitHub Personal Access Token</label>
+        <input type="password" id="githubToken" placeholder="ghp_..." />
+      </div>
+      <div class="field">
+        <label>GitHubリポジトリ（owner/repo）</label>
+        <input type="text" id="githubRepo" value="M-JINSU/kakeibo" />
+      </div>
+    </div>
+
+    <!-- 撮影エリア -->
+    <div class="section-label">📷 レシートを撮影</div>
+    <div class="scan-area" id="scanArea" onclick="document.getElementById('fileInput').click()">
+      <div class="scan-placeholder" id="placeholder">
+        <div class="big-icon">📸</div>
+        <p>タップして撮影 / 画像選択</p>
+        <p class="hint">iPhoneはカメラ起動も可</p>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="onFileSelected(event)">
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">📷 カメラ</button>
+      <button class="btn btn-secondary" onclick="clearImage()">🗑️ クリア</button>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="analyzeReceipt()" disabled>
+      🤖 Gemini AIで解析する
+    </button>
+  </div>
+
+  <!-- ローディング -->
+  <div class="section">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>レシートを解析中...</p>
+      <p style="margin-top:6px;font-size:11px;">Gemini Vision APIで読み取っています</p>
+    </div>
+  </div>
+
+  <!-- 解析結果 -->
+  <div class="section">
+    <div class="result-box" id="resultBox">
+      <div class="result-header">
+        <div>
+          <div class="store-name" id="storeName">－</div>
+          <div class="date-str" id="dateStr">－</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);">タップで修正可</div>
+      </div>
+      <div class="item-list" id="itemList"></div>
+      <div class="total-row">
+        <span class="label">合計</span>
+        <span class="amount" id="totalAmount">¥0</span>
+      </div>
+    </div>
+
+    <button class="btn-save" id="saveBtn" onclick="saveToGitHub()" disabled style="display:none">
+      ☁️ GitHubに保存する
+    </button>
+  </div>
+</div>
+
+<!-- ナビゲーション -->
+<nav class="nav-bar">
+  <a class="nav-item active" href="upload.html">
+    <span class="nav-icon">📷</span>
+    登録
+  </a>
+  <a class="nav-item" href="index.html">
+    <span class="nav-icon">📊</span>
+    集計
+  </a>
+  <a class="nav-item" href="fridge.html">
+    <span class="nav-icon">🧊</span>
+    冷蔵庫
+  </a>
+  <a class="nav-item" href="admin.html">
+    <span class="nav-icon">⚙️</span>
+    管理
+  </a>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let selectedImageBase64 = null;
+let parsedItems = [];
+
+// キー読み込み（localStorage保存）
+window.onload = () => {
+  const gk = localStorage.getItem('geminiKey');
+  const gt = localStorage.getItem('githubToken');
+  const gr = localStorage.getItem('githubRepo');
+  if (gk) document.getElementById('geminiKey').value = gk;
+  if (gt) document.getElementById('githubToken').value = gt;
+  if (gr) document.getElementById('githubRepo').value = gr;
+};
+
+function saveKeys() {
+  localStorage.setItem('geminiKey', document.getElementById('geminiKey').value);
+  localStorage.setItem('githubToken', document.getElementById('githubToken').value);
+  localStorage.setItem('githubRepo', document.getElementById('githubRepo').value);
+}
+
+function onFileSelected(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    selectedImageBase64 = dataUrl.split(',')[1];
+    const scanArea = document.getElementById('scanArea');
+    document.getElementById('placeholder').style.display = 'none';
+    let img = scanArea.querySelector('img');
+    if (!img) { img = document.createElement('img'); scanArea.appendChild(img); }
+    img.src = dataUrl;
+    scanArea.classList.add('has-image');
+    document.getElementById('analyzeBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  selectedImageBase64 = null;
+  const scanArea = document.getElementById('scanArea');
+  const img = scanArea.querySelector('img');
+  if (img) img.remove();
+  document.getElementById('placeholder').style.display = 'block';
+  scanArea.classList.remove('has-image');
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('resultBox').classList.remove('show');
+  document.getElementById('saveBtn').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+async function analyzeReceipt() {
+  saveKeys();
+  const apiKey = document.getElementById('geminiKey').value.trim();
+  if (!apiKey) { showToast('Gemini APIキーを入力してください', 'error'); return; }
+  if (!selectedImageBase64) { showToast('画像を選択してください', 'error'); return; }
+
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('resultBox').classList.remove('show');
+  document.getElementById('saveBtn').style.display = 'none';
+  document.getElementById('analyzeBtn').disabled = true;
+
+  const prompt = `このレシート画像を解析して、以下のJSON形式で返してください。コードブロックや説明文は不要です。JSONのみ返してください。
+{
+  "store": "店名",
+  "date": "YYYY-MM-DD",
+  "items": [
+    {
+      "name": "商品名",
+      "price": 金額(数値),
+      "storage": "冷蔵 or 冷凍 or 常温",
+      "genre": "肉 or 魚 or 野菜 or 果物 or 飲料 or 乳製品 or 冷凍食品 or 菓子 or 調味料 or 日用品 or その他",
+      "shelf_days": 推定日持ち日数(数値)
+    }
+  ]
+}
+storageは食品の保存区分、shelf_daysは開封後の一般的な日持ち日数（冷蔵は3〜7、冷凍は30〜90、常温は7〜180程度）を入れてください。`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: 'image/jpeg', data: selectedImageBase64 } }
+            ]
+          }]
+        })
+      }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    let text = data.candidates[0].content.parts[0].text.trim();
+    text = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(text);
+    parsedItems = parsed.items || [];
+    renderResult(parsed);
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('resultBox').classList.add('show');
+    document.getElementById('saveBtn').style.display = 'flex';
+    document.getElementById('saveBtn').disabled = false;
+    showToast('解析完了！内容を確認してください', 'success');
+  } catch (err) {
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('analyzeBtn').disabled = false;
+    showToast('解析エラー: ' + err.message, 'error');
+    console.error(err);
+  }
+}
+
+function renderResult(data) {
+  document.getElementById('storeName').textContent = data.store || '不明';
+  document.getElementById('dateStr').textContent = data.date || today();
+
+  const list = document.getElementById('itemList');
+  list.innerHTML = '';
+  let total = 0;
+
+  (data.items || []).forEach((item, i) => {
+    total += item.price || 0;
+    const badgeClass = item.storage === '冷蔵' ? 'badge-cold' : item.storage === '冷凍' ? 'badge-frozen' : 'badge-ambient';
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = `
+      <div class="item-name"><input type="text" value="${item.name}" onchange="parsedItems[${i}].name=this.value" /></div>
+      <span class="badge ${badgeClass}">${item.storage}</span>
+      <div class="item-price"><input type="number" value="${item.price}" onchange="parsedItems[${i}].price=parseInt(this.value)||0;updateTotal()" /></div>
+      <span class="item-del" onclick="removeItem(${i})">✕</span>
+    `;
+    list.appendChild(row);
+  });
+
+  document.getElementById('totalAmount').textContent = '¥' + total.toLocaleString();
+}
+
+function updateTotal() {
+  const total = parsedItems.reduce((s, i) => s + (i.price || 0), 0);
+  document.getElementById('totalAmount').textContent = '¥' + total.toLocaleString();
+}
+
+function removeItem(i) {
+  parsedItems.splice(i, 1);
+  const data = {
+    store: document.getElementById('storeName').textContent,
+    date: document.getElementById('dateStr').textContent,
+    items: parsedItems
+  };
+  renderResult(data);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function saveToGitHub() {
+  saveKeys();
+  const token = document.getElementById('githubToken').value.trim();
+  const repo = document.getElementById('githubRepo').value.trim();
+  if (!token || !repo) { showToast('GitHub設定を入力してください', 'error'); return; }
+
+  document.getElementById('saveBtn').disabled = true;
+  document.getElementById('saveBtn').textContent = '保存中...';
+
+  const filePath = 'data/kakeibo.json';
+  const apiBase = `https://api.github.com/repos/${repo}/contents/${filePath}`;
+  const headers = {
+    'Authorization': `token ${token}`,
+    'Content-Type': 'application/json'
+  };
+
+  const storeName = document.getElementById('storeName').textContent;
+  const dateStr = document.getElementById('dateStr').textContent;
+
+  const newEntries = parsedItems.map((item, i) => ({
+    id: `${dateStr.replace(/-/g,'')}-${Date.now()}-${i}`,
+    date: dateStr,
+    store: storeName,
+    name: item.name,
+    price: item.price || 0,
+    storage: item.storage || '常温',
+    genre: item.genre || 'その他',
+    shelf_days: item.shelf_days || 7
+  }));
+
+  try {
+    let existingSha = null;
+    let existingData = [];
+
+    const getRes = await fetch(apiBase, { headers });
+    if (getRes.ok) {
+      const fileData = await getRes.json();
+      existingSha = fileData.sha;
+      existingData = JSON.parse(atob(fileData.content.replace(/\n/g, '')));
+    }
+
+    const merged = [...existingData, ...newEntries];
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(merged, null, 2))));
+
+    const body = {
+      message: `レシート登録: ${storeName} ${dateStr}`,
+      content,
+      ...(existingSha ? { sha: existingSha } : {})
+    };
+
+    const putRes = await fetch(apiBase, {
+      method: 'PUT', headers,
+      body: JSON.stringify(body)
+    });
+
+    if (!putRes.ok) throw new Error('GitHub保存失敗');
+
+    showToast(`${newEntries.length}件を保存しました 🎉`, 'success');
+    setTimeout(() => clearImage(), 1500);
+    document.getElementById('resultBox').classList.remove('show');
+    document.getElementById('saveBtn').style.display = 'none';
+  } catch (err) {
+    showToast('保存エラー: ' + err.message, 'error');
+    document.getElementById('saveBtn').disabled = false;
+    document.getElementById('saveBtn').textContent = '☁️ GitHubに保存する';
+  }
+}
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+</script>
+</body>
+</html>
